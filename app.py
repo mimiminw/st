@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -38,13 +37,20 @@ def adjust_to_benford(data):
     # 생성된 숫자 모음
     new_data = []
     for digit, count in zip(range(1, 10), benford_counts):
-        while len(new_data) < len(data) and count > 0:
+        while count > 0:
             number = digit * 10 ** np.random.uniform(0, 3)
             new_data.append(number)
             count -= 1
-    new_data = np.array(new_data[:len(data)])
 
-    # 평균 맞추기
+    # 부족한 만큼 채우기
+    while len(new_data) < len(data):
+        digit = np.random.choice(range(1, 10), p=benford_dist)
+        number = digit * 10 ** np.random.uniform(0, 3)
+        new_data.append(number)
+
+    new_data = np.array(new_data[:len(data)])  # 정확히 길이 맞추기
+
+    # 평균 유지
     adjusted_data = new_data * (original_mean / new_data.mean())
     return adjusted_data
 
