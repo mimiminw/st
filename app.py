@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 st.set_page_config(page_title="벤포드의 법칙 분석기", layout="centered")
 st.title("🔢 벤포드의 법칙 검증기 (Benford's Law)")
 
-# 벤포드의 법칙 분포
+# 벤포드 분포
 benford_dist = np.log10(1 + 1 / np.arange(1, 10))
 
 def extract_leading_digits(series):
@@ -34,7 +34,6 @@ def adjust_to_benford(data):
     original_mean = np.mean(data)
     benford_counts = (benford_dist * len(data)).astype(int)
 
-    # 생성된 숫자 모음
     new_data = []
     for digit, count in zip(range(1, 10), benford_counts):
         while count > 0:
@@ -42,33 +41,43 @@ def adjust_to_benford(data):
             new_data.append(number)
             count -= 1
 
-    # 부족한 만큼 채우기
     while len(new_data) < len(data):
         digit = np.random.choice(range(1, 10), p=benford_dist)
         number = digit * 10 ** np.random.uniform(0, 3)
         new_data.append(number)
 
-    new_data = np.array(new_data[:len(data)])  # 정확히 길이 맞추기
-
-    # 평균 유지
+    new_data = np.array(new_data[:len(data)])
     adjusted_data = new_data * (original_mean / new_data.mean())
     return adjusted_data
 
-# 파일 업로드
-uploaded = st.file_uploader("📂 엑셀 파일 업로드 (.xlsx, .xls)", type=["xlsx", "xls"])
+# 📂 파일 업로드 (.csv, .xlsx, .xls)
+uploaded = st.file_uploader("📂 CSV 또는 엑셀 파일 업로드", type=["csv", "xlsx", "xls"])
 if uploaded:
-    df = pd.read_excel(uploaded)
+    try:
+        if uploaded.name.endswith(".csv"):
+            df = pd.read_csv(uploaded)
+        else:
+            df = pd.read_excel(uploaded)
+    except Exception as e:
+        st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
+        st.stop()
+
     st.write("데이터 미리보기:")
     st.dataframe(df.head())
 
-    column = st.selectbox("분석할 숫자 열 선택", df.select_dtypes(include='number').columns)
+    numeric_columns = df.select_dtypes(include='number').columns
+    if len(numeric_columns) == 0:
+        st.warning("분석할 수 있는 숫자 열이 없습니다.")
+        st.stop()
+
+    column = st.selectbox("분석할 숫자 열 선택", numeric_columns)
     values = df[column].dropna()
     obs_dist = check_benford(values)
 
     st.subheader("📊 분포 비교")
     plot_distribution(obs_dist, f"'{column}' 열의 분포")
 
-    difference = np.abs(obs_dist.reindex(range(1,10), fill_value=0) - benford_dist)
+    difference = np.abs(obs_dist.reindex(range(1, 10), fill_value=0) - benford_dist)
     if (difference > 0.05).any():
         st.error("❌ 벤포드의 법칙을 따르지 않습니다.")
         if st.button("벤포드 분포에 맞춰 데이터 조정"):
@@ -76,6 +85,8 @@ if uploaded:
             df.loc[values.index, f"{column}_benford"] = adjusted
             st.success("✅ 조정 완료. 평균은 동일하고 벤포드 분포에 맞게 조정됨.")
             st.dataframe(df[[column, f"{column}_benford"]].head())
+
+            # 저장 & 다운로드 버튼
             csv = df.to_csv(index=False).encode("utf-8-sig")
             st.download_button("📥 수정된 CSV 다운로드", data=csv, file_name="benford_adjusted.csv", mime="text/csv")
     else:
